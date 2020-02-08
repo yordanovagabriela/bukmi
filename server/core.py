@@ -7,6 +7,8 @@ from flask import request
 from html_parser import parse
 from keyword_extractor import KeywordExtractor
 
+from nltk.corpus import wordnet 
+
 from invertedindex.inverted_index import InvertedIndex
 from invertedindex.database import Database
 
@@ -43,9 +45,24 @@ def add():
 @app.route('/search', methods=['GET'])
 def search():
   tags = request.get_json()['tags']
+
+  all_tags = set(tags)
+  for tag in tags:
+    all_tags = all_tags | retrieve_synonyms(tag)
+    
   result = inverted_index.lookup_query(tags)
 
   return json.dumps(result)
+
+def retrieve_synonyms(word):
+  synonyms = []
+
+  for synonym in wordnet.synsets(word): 
+    for lemma in synonym.lemmas():
+        print(lemma.name())
+        synonyms.append(lemma.name()) 
+
+  return set(synonyms)
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -26,7 +26,6 @@ class InvertedIndex:
         the documents where they appear.
     """
     def lookup_query(self, terms):
-        urls = []
         result = []
 
         for term in terms:
