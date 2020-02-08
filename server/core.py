@@ -49,7 +49,10 @@ def search():
   all_tags = set(tags)
   for tag in tags:
     all_tags = all_tags | retrieve_synonyms(tag)
-    
+  
+  if app.debug:
+    print("Tags to search for: {}".format(all_tags))
+
   result = inverted_index.lookup_query(tags)
 
   return json.dumps(result)
@@ -59,7 +62,6 @@ def retrieve_synonyms(word):
 
   for synonym in wordnet.synsets(word): 
     for lemma in synonym.lemmas():
-        print(lemma.name())
         synonyms.append(lemma.name()) 
 
   return set(synonyms)
