@@ -1,6 +1,3 @@
-"""
-    In memory database representing the already indexed documents.
-"""
 class Database:
     def __init__(self):
         self.db = dict()

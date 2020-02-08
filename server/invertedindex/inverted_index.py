@@ -1,6 +1,3 @@
-"""
-    Inverted Index class.
-"""
 class InvertedIndex:
     def __init__(self, db):
         self.index = dict()
@@ -9,9 +6,6 @@ class InvertedIndex:
     def __repr__(self):
         return str(self.index)
         
-    """
-        Saves the document to the DB and update the index.
-    """
     def add_index(self, keyword, bookmark_id):
         if keyword not in self.index:
             self.index[keyword] = [bookmark_id]
@@ -20,11 +14,6 @@ class InvertedIndex:
             occurances.append(bookmark_id)
             self.index[keyword] = occurances
     
-    """
-        Returns the dictionary of terms with their correspondent Appearances. 
-        This is a very naive search since it will just split the terms and show
-        the documents where they appear.
-    """
     def lookup_query(self, terms):
         result = []
 
