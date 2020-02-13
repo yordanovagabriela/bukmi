@@ -1,13 +1,13 @@
 from storage.persistence_service import PersistenceService
 from elasticsearch import Elasticsearch
-
+import json
 ENDPOINT_URL = 'https://c7d944ec53ba43069b2313a242cc5ca8.europe-west3.gcp.cloud.es.io:9243'
 
 class ElasticsearchService(PersistenceService):
     def __init__(self):
         self.endpoint_url = ENDPOINT_URL
         self.username = 'elastic'
-        self.password = 'oDN2zseIAJBYKWd0fDbfeBva'
+        self.password = ''
         self.index = 'bookmark'
         self._connect()
 
@@ -35,4 +35,4 @@ class ElasticsearchService(PersistenceService):
                 "match_all": {}
             }
         }
-        return self.search(query)
+        return json.dumps(self.search(query))
