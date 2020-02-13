@@ -2,10 +2,7 @@ class InvertedIndex:
     def __init__(self, db):
         self.index = dict()
         self.db = db
-
-    def __repr__(self):
-        return str(self.index)
-        
+ 
     def add_index(self, keyword, bookmark_id):
         if keyword not in self.index:
             self.index[keyword] = [bookmark_id]
@@ -13,6 +10,8 @@ class InvertedIndex:
             occurances = self.index[keyword]
             occurances.append(bookmark_id)
             self.index[keyword] = occurances
+
+        return True
     
     def lookup_query(self, terms):
         result = []

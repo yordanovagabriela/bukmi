@@ -1,120 +1,118 @@
-import nltk
-import re
+import time
 import string
-import operator
+import re
 
-from nltk.tokenize import TweetTokenizer
-from nltk.stem import WordNetLemmatizer
-from nltk.tag import pos_tag
+import numpy as np
+import spacy
 
-nltk.download('wordnet')
-nltk.download('stopwords')
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
+from collections import OrderedDict
+from spacy.lang.en.stop_words import STOP_WORDS
 
+import text_preprocessor as preprocessor
 
-def toLowercase(content):
-  return content.lower()
+nlp = spacy.load('en_core_web_sm')
 
-def remove_numbers(content):
-  return re.sub(r'\d+', '', content)
-
-def remove_punctuation(content):
-  return content.translate(str.maketrans('', '', string.punctuation + "”“"))
-
-def tokenize(content):
-    tokenizer = TweetTokenizer()
-    return tokenizer.tokenize(content)
-
-def isPunct(word):
-  return len(word) == 1 and word in string.punctuation
-
-def isNumeric(word):
-  try:
-    float(word) if '.' in word else int(word)
-    return True
-  except ValueError:
-    return False
-
-def lemmatize(word):
-    lemmatizer = WordNetLemmatizer()
-
-    result = pos_tag(word)
-    if (result is None) or (len(result) == 0):
-        return word
+class TextRankKeywordExtractor():
+    def __init__(self):
+        self.damping_coefficient = 0.85
+        self.min_difference = 1e-5
+        self.steps = 10
+        self.node_weight = None
     
-    tag = result[0][1]
+    def set_stopwords(self, stopwords):  
+        for word in STOP_WORDS.union(set(stopwords)):
+            lexeme = nlp.vocab[word]
+            lexeme.is_stop = True
 
-    if tag.startswith("NN"):
-        return lemmatizer.lemmatize(word, pos='n')
-    elif tag.startswith('VB'):
-        return lemmatizer.lemmatize(word, pos='v')
-    elif tag.startswith('JJ'):
-        return lemmatizer.lemmatize(word, pos='a')
-    else:
-        return word
- 
-class KeywordExtractor:
+    def extract_sentences(self, document, candidate_pos):
+        sentences = []
 
-  def __init__(self):
-    self.stopwords = set(nltk.corpus.stopwords.words())
-    self.top_fraction = 3
+        for sentence in document.sents:
+            prsentence = preprocessor.preprocess_sentence(sentence)
+            selected_words = []
+            for token in prsentence:
+                if token.pos_ in candidate_pos and token.is_stop is False:
+                    selected_words.append(token.lemma_.lower())
+            sentences.append(selected_words)
 
-  def _generate_candidate_keywords(self, sentences):
-    phrase_list = []
+        return sentences
+        
+    def build_vocabulary(self, sentences):
+        vocabulary = OrderedDict()
+        i = 0
 
-    for sentence in sentences:
-      words = map(lambda x: "|" if x in self.stopwords else x, nltk.word_tokenize(sentence.lower()))
-      words = map(lambda x: x.strip(), words)
-      words = map(lambda x: remove_numbers(x), words)
-      words = filter(lambda x: x != "”" or x != "“", words)
-      words = map(lambda x: remove_punctuation(x) if len(x) > 1 else x , words)
-      words = map(lambda x: "|" if x in self.stopwords else x, words)
-      words = map(lambda x: "|" if len(x) == 1 and not isPunct(x) else x, words)
-
-      words = map(lambda x: lemmatize(x), words)
-
-      phrase = []
-      for word in words:
-        if word == "|" or isPunct(word):
-          if len(phrase) > 0:
-            phrase_list.append(phrase)
-            phrase = []
-        else:
-          phrase.append(word)
-
-    return phrase_list
-
-  def _calculate_word_scores(self, phrase_list):
-    word_freq = nltk.FreqDist()
-    word_degree = nltk.FreqDist()
-
-    for phrase in phrase_list:
-      degree = len(list(filter(lambda x: not isNumeric(x), phrase))) - 1
-      for word in phrase:
-        word_freq[word] += 1
-        word_degree[word] += degree
-
-    for word in word_freq.keys():
-      word_degree[word] = word_degree[word] + word_freq[word]
-
-    word_scores = {}
-    for word in word_freq.keys():
-      word_scores[word] = word_degree[word] / word_freq[word]
-
-    return word_scores
+        for sentence in sentences:
+            for word in sentence:
+                if word not in vocabulary:
+                    vocabulary[word] = i
+                    i += 1
+        return vocabulary
     
-  def extract(self, text, incl_scores=False):
-    sentences = nltk.sent_tokenize(text)
-    phrase_list = self._generate_candidate_keywords(sentences)
+    def create_token_pairs_by_windows_size(self, window_size, sentences):
+        token_pairs = list()
 
-    word_scores = self._calculate_word_scores(phrase_list)
-    sorted_word_scores = sorted(word_scores.items(), key=operator.itemgetter(1), reverse=True)
-    n_words = len(sorted_word_scores)
+        for sentence in sentences:
+            for i, word in enumerate(sentence):
+                for j in range(i + 1, i + window_size):
+                    if j >= len(sentence):
+                        break
+                    pair = (word, sentence[j])
+                    if pair not in token_pairs:
+                        token_pairs.append(pair)
+        return token_pairs
+        
+    def symmetrize(self, matrix):
+        return matrix + matrix.T - np.diag(matrix.diagonal())
+    
+    def create_matrix(self, vocabulary, token_pairs):
+        vocabulary_size = len(vocabulary)
+        matrix = np.zeros((vocabulary_size, vocabulary_size), dtype='float')
 
-    if incl_scores:
-    #   return sorted_word_scores[0:int(n_words/self.top_fraction)]
-        return sorted_word_scores[0:15]
-    else:
-    #   return map(lambda x: x[0], sorted_word_scores[0:int(n_words/self.top_fraction)])
-        return map(lambda x: x[0], sorted_word_scores[0:15])
+        for word1, word2 in token_pairs:
+            i, j = vocabulary[word1], vocabulary[word2]
+            matrix[i][j] = 1
+            
+        matrix = self.symmetrize(matrix)
+        
+        norm = np.sum(matrix, axis=0)
+        matrix_normalized = np.divide(matrix, norm, where=norm!=0)
+        
+        return matrix_normalized
+
+    def get_keywords(self, number=20):
+        node_weight = OrderedDict(sorted(self.node_weight.items(), key=lambda t: t[1], reverse=True))
+
+        keywords = []
+        for i, (key, value) in enumerate(node_weight.items()):
+            keywords.append(key)
+            if i > number:
+                break
+
+        return keywords
+  
+    def analyze(self, text, candidate_pos=['NOUN', 'PROPN', 'VERB'], window_size=4, stopwords=list()):
+        self.set_stopwords(stopwords)
+
+        text = preprocessor.preprocess_text(text)
+        document = nlp(text)
+
+        sentences = self.extract_sentences(document, candidate_pos)
+        vocabulary = self.build_vocabulary(sentences)
+        token_pairs = self.create_token_pairs_by_windows_size(window_size, sentences)
+        
+        normalized_matrix = self.create_matrix(vocabulary, token_pairs)
+        pagerank_vector = np.array([1] * len(vocabulary))
+        
+        previous_pagerank = 0
+        for epoch in range(self.steps):
+            pagerank_vector = (1 - self.damping_coefficient) + self.damping_coefficient * np.dot(normalized_matrix, pagerank_vector)
+            if abs(previous_pagerank - sum(pagerank_vector))  < self.min_difference:
+                break
+            else:
+                previous_pagerank = sum(pagerank_vector)
+
+        node_weight = dict()
+        for word, index in vocabulary.items():
+            node_weight[word] = pagerank_vector[index]
+        
+        self.node_weight = node_weight

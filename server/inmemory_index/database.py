@@ -3,9 +3,6 @@ class Database:
         self.db = dict()
         self.id = 0
 
-    def __repr__(self):
-        return str(self.__dict__)
-    
     def get(self, id):
         return self.db.get(id)
 
