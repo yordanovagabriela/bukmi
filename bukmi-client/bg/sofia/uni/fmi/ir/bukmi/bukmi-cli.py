@@ -47,6 +47,7 @@ def pretty_print(bookmarks):
     for bookmark in bookmarks:
         message = "{}. {} \n   > {}".format(index, bookmark['title'], bookmark['url'])
         click.echo(message)
+        index += 1
 
 if __name__ == '__main__':
     main()

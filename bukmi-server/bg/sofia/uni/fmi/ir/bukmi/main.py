@@ -1,18 +1,20 @@
 import requests
 import json
-
 from flask import Flask
 from flask import request
 
-from html_parser import parse
-from keyword_extractor import TextRankKeywordExtractor
+from storage.persistence_service_factory import PersistenceServiceFactory
 
-from inmemory_index.inverted_index import InvertedIndex
-from inmemory_index.database import Database
 
-from text_preprocessor import retrieve_synonyms
-from text_preprocessor import lemmatize
-from elasticsearch_client import ElasticsearchClient
+from preprocessor.html_parser import parse
+from core.keyword_extractor import TextRankKeywordExtractor
+
+from inverted_index.inverted_index import InvertedIndex
+from inverted_index.database import Database
+
+from preprocessor.text_preprocessor import retrieve_synonyms
+from preprocessor.text_preprocessor import lemmatize
+from elastic_client.elasticsearch_client import ElasticsearchClient
 
 app = Flask(__name__)
 
@@ -61,4 +63,24 @@ def get():
   return json.dumps(bookmarks)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    service_inmemory = PersistenceServiceFactory().getInstance('INMEMORY')
+    service_elastic = PersistenceServiceFactory().getInstance('ELASTIC')
+
+    bookmark = {'url': 'http://test', 'title': 'wikipedia', 'tags': ['test']}
+
+    query2 = {
+            "query": {
+                "terms" : {
+                    "tags" :["test", "test2"]
+                }
+            }
+        } 
+
+    # service_elastic.index_doc(bookmark)
+    print(service_elastic.search(query2))
+    print(service_elastic.list())
+
+    # service_inmemory.index_doc(bookmark)
+    # print(service_inmemory.search(query2))
+    # print(service_inmemory.list())
+    #app.run(debug=True)

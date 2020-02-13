@@ -8,7 +8,7 @@ import spacy
 from collections import OrderedDict
 from spacy.lang.en.stop_words import STOP_WORDS
 
-import text_preprocessor as preprocessor
+import preprocessor.text_preprocessor as preprocessor
 
 nlp = spacy.load('en_core_web_sm')
 
